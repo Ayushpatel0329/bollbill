@@ -1,62 +1,296 @@
-# BOLL BILL: backend + AI
+# BOLL BILL (बोल बिल) - Intelligent Multilingual Voice & AI Billing System
 
-```
-bollbill/
-  DEPLOY.md                step-by-step: Supabase, Render, Netlify, tests, troubleshooting
-  supabase/schema.sql      database: tables, security rules, functions (run once in Supabase)
-  backend/                 AI service (Python, FastAPI) -> talks to Claude
-    app/main.py            endpoints: /agent/chat, /agent/voice-bill, /agent/actions/...
-    app/tools.py           what the AI is allowed to do (read tools + one "ask owner first" action)
-    app/agent.py           Claude calls (prompts, tool loop)
-    app/drafts.py          checks everything the AI returns for a voice bill
-    app/analytics.py       sales / udhaar / stock calculations (no AI involved)
-    app/auth.py, db.py     login-token check, database client (uses the USER's token)
-    tests/                 offline tests
-    .env.example           the settings the service needs
-    Dockerfile
-  frontend/index.html      your app: landing + login + onboarding + cloud sync + Assistant tab
-  frontend/tests/          offline sync test
-```
+> Fast, offline-first voice billing system and business assistant tailored for Indian retail, wholesale, and kirana stores.
 
-## How the pieces connect
+---
 
-```
-Browser (index.html)
-   |-- login, shop, items, bills --> Supabase (Auth + Postgres, protected by Row Level Security)
-   |-- "AI se bill banao", Assistant --> AI service --> Claude
-                                            |
-                                            +--> Supabase, with the logged-in user's own token
-```
+## 🌟 Key Features
 
-* The browser keeps working like before (instant, even offline). Every change is copied to Supabase in the background.
-* If `BB_CONFIG` in `index.html` is empty, the app runs in **local demo mode** (data only in that browser).
-* The AI service never has a master database key. It uses the user's token, so the AI can only see
-  the logged-in owner's own shop.
-* The Claude API key lives only in the AI service, never in the HTML.
+- **Multilingual Voice-to-Bill**: Support for Hindi, Hinglish, and English voice commands via Web Speech API and NVIDIA Riva Cloud STT fallback.
+- **AI Business Assistant & Reasoning**: Powered by NVIDIA Nemotron & Claude 3.5 Sonnet to query sales, stock, pending udhaar, and execute safe business tools.
+- **Offline-First Data Sync**: Instant local updates with automatic bi-directional sync to Supabase PostgreSQL when connected.
+- **GST & UPI Billing**: Full GST calculation (CGST/SGST/IGST), discount options (% or flat ₹), and automatic dynamic UPI QR generation.
+- **Udhaar Management**: Debt tracking, overdue reminders, and WhatsApp customer messaging directly from the interface.
+- **Purchase CSV/TSV Import**: Auto-detection of columns, alias matching, price margin computation, and multi-step preview/commit with undo.
+- **Enterprise-Grade CI/CD & Deploy**: Native GitHub Actions automated testing suite and unified Vercel deployment configuration.
 
-## What the AI can and cannot do
+---
 
-| Can (reads, answers directly) | Cannot without the owner tapping "Haan" |
-|---|---|
-| today / week / month sales, GST collected | mark udhaar as paid (one bill or a whole customer) |
-| udhaar per customer | |
-| low stock, top selling items, find a bill | |
-| turn a spoken sentence into a **draft** bill (nothing is saved; the app shows it) | |
+## 🏗 System Architecture
 
-It cannot delete anything, change prices, or create bills by itself. Every AI call is logged in `agent_runs`.
+BOLL BILL uses an offline-first single-page frontend (HTML5/CSS3/Vanilla JS) connected to a high-performance FastAPI asynchronous backend, backed by Supabase PostgreSQL with Row Level Security (RLS).
 
-## Run the tests (no internet needed)
+```mermaid
+graph TD
+    Client[Browser / Single Page App]
+    Backend[FastAPI Backend Service]
+    SupabaseAuth[Supabase Auth]
+    SupabaseDB[(PostgreSQL Database)]
+    NVIDIA[NVIDIA AI / Riva STT / Nemotron]
+    Claude[Anthropic Claude 3.5 Sonnet]
 
-```
-cd backend && python -m tests.test_backend      # 14 tests: bill maths, reports, AI-output checks, tools, agent loop
-node frontend/tests/sync_harness.js             # 15 checks: cloud sync, 2 devices, offline, number clashes
+    Client -->|Direct REST / Offline-First Sync| SupabaseDB
+    Client -->|Token Auth & Proxy| Backend
+    Client -->|Auth State| SupabaseAuth
+    Backend -->|Auth Verification & Storage| SupabaseDB
+    Backend -->|LLM Reasoning & STT| NVIDIA
+    Backend -->|Complex Business Agent| Claude
 ```
 
-## Known limits of this version
+### Request & Sync Lifecycle
 
-* Login is email + password. Mobile-number OTP needs an SMS provider (MSG91/Twilio) and costs money; add later.
-* Two devices editing the price list at the same moment: the last save wins.
-* The app screen shows the latest 500 bills (plus every unpaid udhaar bill, whatever its age).
-* "Delete all saved bills" in History also deletes the cloud copy (hard delete). Change to soft delete before you rely on it for accounts.
-* Rate limits are kept in the memory of one server process; use Redis if you run several.
-* `agent_runs` can be edited by the shop owner, so treat it as a debugging log, not a tamper-proof audit trail.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Shop Owner / Staff
+    participant UI as Frontend (SPA)
+    participant LS as Local Storage
+    participant API as FastAPI Backend
+    participant DB as Supabase PostgreSQL
+
+    User->>UI: Speaks voice bill or enters item
+    UI->>LS: Writes transaction locally (Zero latency)
+    UI->>UI: Renders Bill & UPI QR Code
+    alt Online Connected
+        UI->>API: Sends voice audio / assistant query (if AI enabled)
+        API->>UI: Returns structured bill lines or insights
+        UI->>DB: Triggers background sync (RPC: create_bill / replace_items)
+        DB-->>UI: Sync OK (Cloud me save ho gaya)
+    else Offline
+        UI-->>User: Operates seamlessly in local mode
+    end
+```
+
+---
+
+## 📊 Database Architecture
+
+The PostgreSQL schema enforces strict data integrity, isolation per shop, and secure Row Level Security (RLS) policies.
+
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    SHOPS ||--o{ ITEMS : owns
+    SHOPS ||--o{ BILLS : issues
+    SHOPS ||--o{ AGENT_RUNS : executes
+    SHOPS ||--o{ AGENT_ACTIONS : proposes
+    SHOPS ||--o{ ITEM_ALIASES : maps
+    SHOPS ||--o{ IMPORT_BATCHES : logs
+    IMPORT_BATCHES ||--o{ IMPORT_ITEMS : contains
+
+    SHOPS {
+        uuid id PK
+        uuid owner_id FK
+        text name
+        text upi_id
+        text gstin
+        int low_stock_limit
+        int next_bill_no
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ITEMS {
+        uuid id PK
+        uuid shop_id FK
+        int position
+        text name
+        text_array aliases
+        text unit
+        numeric price
+        numeric stock
+        timestamptz updated_at
+    }
+
+    BILLS {
+        uuid id PK
+        uuid shop_id FK
+        uuid client_id
+        int bill_no
+        timestamptz billed_at
+        numeric sub
+        text disc_type
+        numeric disc_val
+        numeric disc
+        numeric gst_pct
+        numeric gst
+        numeric total
+        text pay_method
+        text customer
+        boolean paid
+        timestamptz paid_at
+        jsonb lines
+        text source
+    }
+
+    AGENT_RUNS {
+        uuid id PK
+        uuid shop_id FK
+        uuid user_id
+        text kind
+        text input
+        text output
+        jsonb tool_calls
+        text model
+        text status
+        timestamptz created_at
+    }
+
+    AGENT_ACTIONS {
+        uuid id PK
+        uuid shop_id FK
+        uuid run_id FK
+        text kind
+        jsonb params
+        text summary
+        text status
+        timestamptz expires_at
+        timestamptz decided_at
+    }
+```
+
+---
+
+## 📁 Project Structure
+
+```
+d:/bollbill/
+├── .github/
+│   └── workflows/
+│       └── ci-cd.yml             # GitHub Actions CI/CD Pipeline
+├── backend/
+│   ├── app/
+│   │   ├── agent.py              # LLM agent coordinator & prompts
+│   │   ├── analytics.py          # Business stats & sales calculations
+│   │   ├── auth.py               # Supabase token validation & cache
+│   │   ├── config.py             # App environment variables & settings
+│   │   ├── db.py                 # Async HTTP database interface
+│   │   ├── errors.py             # Custom domain error hierarchies
+│   │   ├── importer.py           # Purchase file parsing & column detection
+│   │   ├── main.py               # FastAPI application & API endpoints
+│   │   ├── reasoning.py          # NVIDIA Nemotron client & chain logic
+│   │   ├── stt.py                # Speech-to-text integration (NVIDIA Riva)
+│   │   ├── tools.py              # Tool execution (stock, bills, udhaar)
+│   │   └── udhaar_agent.py       # Udhaar reminder generation & inbox
+│   ├── tests/
+│   │   ├── test_backend.py       # Unit tests for core business calculations
+│   │   └── test_release2.py      # Tests for file import and udhaar agent
+│   └── requirements.txt          # Python dependencies
+├── frontend/
+│   ├── index.html                # Single Page Application (UI + Engine)
+│   └── tests/
+│       └── sync_harness.js       # Offline & bi-directional sync unit tests
+├── supabase/
+│   └── schema.sql                # Complete PostgreSQL schema & RLS rules
+├── requirements.txt              # Root build requirements for Vercel
+├── vercel.json                   # Unified full-stack deployment config
+└── README.md                     # Comprehensive project documentation
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Python 3.10+** (Tested on Python 3.11 / 3.12 / 3.14)
+- **Node.js 18+** (For running frontend synchronization unit tests)
+- **Supabase Account** (For cloud database and authentication)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Ayushpatel0329/bollbill.git
+cd bollbill
+```
+
+### 2. Configure Environment Variables
+
+Create a `.env` file in the `backend/` directory:
+
+```ini
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# AI Provider Keys
+NVIDIA_MAIN_API_KEY=nvapi-your-key-here
+NVIDIA_MAIN_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_STT_API_KEY=nvapi-your-key-here
+
+# Optional: Claude / Anthropic
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+
+# System Settings
+ALLOWED_ORIGINS=*
+RATE_LIMIT_PER_MIN=60
+DAILY_AI_LIMIT=500
+MAX_TOOL_ROUNDS=5
+SHOP_TIMEZONE=Asia/Kolkata
+```
+
+### 3. Setup Database Schema
+
+1. Open your Supabase Project Dashboard.
+2. Navigate to **SQL Editor** -> **New query**.
+3. Copy and run the entire content of [`supabase/schema.sql`](supabase/schema.sql).
+
+### 4. Run Backend Server
+
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The backend API will be available at `http://127.0.0.1:8000`. You can inspect documentation at `http://127.0.0.1:8000/docs`.
+
+### 5. Run Frontend
+
+In a separate terminal:
+
+```bash
+python -m http.server 5500 --directory frontend
+```
+
+Open `http://127.0.0.1:5500` in your web browser.
+
+---
+
+## 🧪 Testing Suite
+
+### 1. Core Backend Business Logic Tests
+```bash
+cd backend
+python -m tests.test_backend
+```
+*Validates tax/discount formulas, chat cleaning, safety guards, and tool outputs (14 tests).*
+
+### 2. Purchase Import & Udhaar Agent Tests
+```bash
+cd backend
+python -m unittest tests/test_release2.py
+```
+*Validates CSV column parsing, fuzzy item matching, margin computation, and overdue bill discovery (8 tests).*
+
+### 3. Frontend Bi-Directional Cloud Sync Harness
+```bash
+node frontend/tests/sync_harness.js
+```
+*Executes simulated browser offline mutations, cloud conflict resolution, clashing bill numbers, and isolated multi-tenant clean states (18 tests).*
+
+---
+
+## 🚢 Deployment
+
+### Vercel Unified Deployment
+
+The repository includes a root `vercel.json` and `requirements.txt` to deploy both frontend static assets and backend serverless endpoints on Vercel:
+
+1. Import your GitHub repository into Vercel.
+2. Add the environment variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NVIDIA_MAIN_API_KEY`, etc.) in Project Settings.
+3. Deploy!
+   - `/api/*`, `/agent/*`, `/health`, `/docs` route directly to `@vercel/python` backend.
+   - All other routes serve the static frontend.
