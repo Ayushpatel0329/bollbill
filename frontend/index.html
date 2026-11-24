@@ -349,6 +349,15 @@ radial-gradient(380px circle at 12% 8%,rgba(239,151,62,.22),transparent 60%)}
 /* ===== cloud + assistant additions ===== */
 #gate .g-err.ok{color:#305A2F}
 #gate .g-btn[disabled]{opacity:.65;cursor:progress}
+.g-forgot-wrap{position:relative;display:flex;justify-content:flex-end;margin:4px 0 10px}
+.g-forgot-btn{background:none;border:0;color:#284a26;font:600 13px/1.2 Inter,sans-serif;padding:4px 2px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(40,74,38,.35);transition:color .2s,text-decoration-color .2s}
+.g-forgot-btn:hover{color:var(--g-cr);text-decoration-color:var(--g-cr)}
+.g-forgot-btn:focus-visible{outline:2px solid var(--g-or);outline-offset:2px;border-radius:4px}
+.g-forgot-tip{position:absolute;right:0;bottom:calc(100% + 8px);width:260px;padding:10px 12px;border-radius:12px;background:#182817;color:var(--g-cream);border:1px solid rgba(239,151,62,.45);box-shadow:0 12px 28px -6px rgba(0,0,0,.5);font-size:12.5px;line-height:1.45;text-align:left;pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .2s ease,transform .2s ease;z-index:30}
+.g-forgot-tip::after{content:"";position:absolute;top:100%;right:24px;border:6px solid transparent;border-top-color:#182817}
+.g-forgot-wrap:hover .g-forgot-tip,.g-forgot-wrap:focus-within .g-forgot-tip{opacity:1;transform:none}
+.g-forgot-tip-head{font-weight:700;font-size:12px;color:var(--g-or);margin-bottom:3px;display:flex;align-items:center;gap:4px}
+.g-forgot-tip-text{color:#ede8da;font-size:12px;font-weight:400}
 #aiLog{max-height:52vh;overflow:auto;margin:8px 0}
 #aiLog .m{padding:9px 12px;border-radius:14px;margin:6px 0;max-width:92%;white-space:pre-wrap;word-break:break-word;font-size:15px}
 #aiLog .u{background:var(--accent);color:var(--accent-t);margin-left:auto;border-bottom-right-radius:4px}
@@ -431,8 +440,12 @@ window.BB_CONFIG = { SUPABASE_URL: "https://iehmrniimqvfhaeedgdx.supabase.co", S
       <input id="aPw2" type="password" autocomplete="new-password">
      </div>
      <div class="g-err" id="authErr" role="alert"></div>
-     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-      <button type="button" id="btnForgot" class="g-link" style="font-size:13px;padding:4px 0">Password bhool gaye?</button>
+     <div class="g-forgot-wrap" id="forgotWrap">
+      <button type="button" id="btnForgot" class="g-forgot-btn" aria-describedby="forgotTip">Password bhool gaye?</button>
+      <div class="g-forgot-tip" id="forgotTip" role="tooltip">
+       <div class="g-forgot-tip-head">🔑 Password Reset</div>
+       <div class="g-forgot-tip-text">Upar apna registered email likhein aur yahan click karein. Password reset link aapke email par bhej diya jayega.</div>
+      </div>
      </div>
      <button class="g-btn" type="submit" id="authBtn">Login karein</button>
     </form>
@@ -1834,7 +1847,7 @@ if(animated){
 
   function wipeLocal(){
    KEYS.forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
-   try{items=JSON.parse(JSON.stringify(SAMPLE)).map(it=>({...it,stock:Number.isFinite(it.stock)?it.stock:null}));hist=[];billNo=1;bill=[];shop={name:'My Shop',upi:''}}catch(e){}
+   try{items=[];hist=[];billNo=1;bill=[];shop={name:'',upi:''}}catch(e){}
   }
 
   async function pushShop(){
@@ -1980,7 +1993,7 @@ if(animated){
  function setMode(m){
   mode=m;const su=m==='signup';
   $('tabLogin').setAttribute('aria-selected',!su);$('tabSignup').setAttribute('aria-selected',su);
-  $('aPw2Wrap').hidden=!su;
+  $('aPw2Wrap').hidden=!su;if($('forgotWrap'))$('forgotWrap').hidden=su;
   $('authTitle').textContent=su?'Naya account banayein':'Wapas aaiye';
   $('authSub').textContent=su?'Kuch hi second me account ban jayega.':'Apne account me login karke bill banana shuru karein.';
   $('authBtn').textContent=su?'Account banayein':'Login karein';
@@ -2011,20 +2024,41 @@ if(animated){
  $('btnForgot').addEventListener('click', async () => {
   const err = $('authErr'), idEl = $('aId'), email = idEl.value.trim().toLowerCase(), btn = $('btnForgot');
   note(err, '');
-  if (!email || !/^[^s@]+@[^s@]+\.[^s@]{2,}$/.test(email)) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
    idEl.classList.add('bad');
    note(err, 'Pehle apna registered email likhein.');
    idEl.focus();
    return;
   }
   btn.disabled = true;
+  btn.textContent = 'Bhej rahe hain…';
   try {
-   await auth.resetPassword(email);
-   note(err, 'Password reset ka link aapke email par bhej diya gaya hai.', true);
+   // 1. Try on frontend client first
+   try {
+    await auth.resetPassword(email);
+    note(err, 'Password reset ka link aapke email par bhej diya gaya hai.', true);
+    return;
+   } catch(feErr) {
+    console.warn('Frontend reset failed, trying backend fallback:', feErr);
+   }
+   // 2. Fallback to backend API
+   const apiBase = (window.BB_CONFIG && window.BB_CONFIG.AGENT_API_URL) || '';
+   const res = await fetch(apiBase + '/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+   });
+   const data = await res.json().catch(() => ({}));
+   if (res.ok && data.ok) {
+    note(err, data.message || 'Password reset ka link aapke email par bhej diya gaya hai.', true);
+   } else {
+    throw new Error(data.detail || data.message || 'Password reset link bhejne me asafal. Dobara koshish karein.');
+   }
   } catch(ex) {
-   note(err, ex.message);
+   note(err, ex.message || 'Kuch gadbad ho gayi. Dobara koshish karein.');
   } finally {
    btn.disabled = false;
+   btn.textContent = 'Password bhool gaye?';
   }
  });
 

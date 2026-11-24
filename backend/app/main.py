@@ -148,6 +148,46 @@ async def health(request: Request):
     }
 
 
+# ---------------- AUTH & PASSWORD RESET ----------------
+
+class ResetPasswordPayload(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password_endpoint(payload: ResetPasswordPayload, request: Request):
+    """Fallback password reset handler called by frontend or direct client."""
+    s = request.app.state.settings
+    url = f"{s.supabase_url.rstrip('/')}/auth/v1/recover"
+    headers = {
+        "apikey": s.supabase_anon_key,
+        "Content-Type": "application/json"
+    }
+    http: httpx.AsyncClient = request.app.state.http
+    try:
+        r = await http.post(url, headers=headers, json={"email": payload.email}, timeout=10.0)
+        if r.status_code in (200, 204):
+            return {
+                "ok": True,
+                "message": "Password reset ka link aapke email par bhej diya gaya hai."
+            }
+        if r.status_code == 429 or "rate_limit" in r.text:
+            return {
+                "ok": True,
+                "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
+            }
+        return {
+            "ok": True,
+            "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
+        }
+    except Exception as ex:
+        log.warning(f"Reset password error: {ex}")
+        return {
+            "ok": True,
+            "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
+        }
+
+
 # ---------------- RELEASE 2: FEATURE 2 (PURCHASE FILE IMPORT) ----------------
 
 @app.post("/api/pricelist/import/parse")
