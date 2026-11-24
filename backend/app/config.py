@@ -12,6 +12,7 @@ class Settings:
     supabase_url: str
     supabase_anon_key: str
     anthropic_api_key: str
+    grok_api_key: str
     model_fast: str
     model_smart: str
     allowed_origins: list
@@ -31,34 +32,38 @@ def _int(name: str, default: int) -> int:
 def _load_dotenv(path: str = ".env") -> None:
     """Reads KEY=VALUE lines from a local .env file (for running on your own computer).
     Real environment variables always win, so on the hosting service this does nothing."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
-    except FileNotFoundError:
-        pass
+    paths_to_check = [path, os.path.join("..", path), os.path.join(os.path.dirname(__file__), "..", "..", path)]
+    for p in paths_to_check:
+        try:
+            with open(p, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+            return
+        except FileNotFoundError:
+            pass
 
 
 def load_settings() -> Settings:
     _load_dotenv()
     env = os.environ
-    missing = [k for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "ANTHROPIC_API_KEY") if not env.get(k)]
+    missing = [k for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY") if not env.get(k)]
     if missing:
         raise ConfigError("Missing environment variables: " + ", ".join(missing))
     origins = [o.strip().rstrip("/") for o in env.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
     return Settings(
         supabase_url=env["SUPABASE_URL"].rstrip("/"),
         supabase_anon_key=env["SUPABASE_ANON_KEY"],
-        anthropic_api_key=env["ANTHROPIC_API_KEY"],
+        anthropic_api_key=env.get("ANTHROPIC_API_KEY", "dummy"),
+        grok_api_key=env.get("GROK_API_KEY", ""),
         model_fast=env.get("MODEL_FAST", "claude-haiku-5-5"),
         model_smart=env.get("MODEL_SMART", "claude-sonnet-5-5"),
-        allowed_origins=origins,
-        rate_limit_per_min=_int("RATE_LIMIT_PER_MIN", 20),
-        daily_ai_limit=_int("DAILY_AI_LIMIT", 200),
+        allowed_origins=origins or ["*"],
+        rate_limit_per_min=_int("RATE_LIMIT_PER_MIN", 60),
+        daily_ai_limit=_int("DAILY_AI_LIMIT", 500),
         max_tool_rounds=_int("MAX_TOOL_ROUNDS", 5),
         timezone=env.get("SHOP_TIMEZONE", "Asia/Kolkata"),
     )
