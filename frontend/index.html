@@ -431,6 +431,9 @@ window.BB_CONFIG = { SUPABASE_URL: "https://iehmrniimqvfhaeedgdx.supabase.co", S
       <input id="aPw2" type="password" autocomplete="new-password">
      </div>
      <div class="g-err" id="authErr" role="alert"></div>
+     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button type="button" id="btnForgot" class="g-link" style="font-size:13px;padding:4px 0">Password bhool gaye?</button>
+     </div>
      <button class="g-btn" type="submit" id="authBtn">Login karein</button>
     </form>
    </div>
@@ -683,7 +686,7 @@ const SAMPLE = [
  {name:'Onion', aliases:['onion','pyaz','pyaaz','प्याज'], unit:'kg', price:40},
  {name:'Potato', aliases:['potato','aloo','आलू'], unit:'kg', price:30}
 ];
-let items = store.get('vb_items', SAMPLE).map(it => ({...it, stock: Number.isFinite(it.stock) ? it.stock : null}));
+let items = store.get('vb_items', []).map(it => ({...it, stock: Number.isFinite(it.stock) ? it.stock : null}));
 let bill  = store.get('vb_bill', []);      // current bill lines
 let hist  = store.get('vb_hist', []);      // saved bills
 let billNo = store.get('vb_no', 1);
@@ -1782,7 +1785,8 @@ if(animated){
   async signIn(email,pw){const u=ls.get('vb_users',{});if(!u[email]||u[email].h!==await hash(pw))throw new Error('Email ya password galat hai.');ls.set('vb_session',email);return {}},
   async signOut(){try{localStorage.removeItem('vb_session')}catch(e){}},
   async getBiz(){const s=ls.get('vb_session',null),u=ls.get('vb_users',{});return s&&u[s]?u[s].biz:null},
-  async saveBiz(b){const s=ls.get('vb_session',null),u=ls.get('vb_users',{});if(u[s]){u[s].biz=b;ls.set('vb_users',u)}}
+  async saveBiz(b){const s=ls.get('vb_session',null),u=ls.get('vb_users',{});if(u[s]){u[s].biz=b;ls.set('vb_users',u)}},
+  async resetPassword(email){return {ok:true}}
  };
  function mapErr(e){
   const m=((e&&e.message)||'').toLowerCase(),c=(e&&(e.code||e.error_code))||'';
@@ -1804,6 +1808,7 @@ if(animated){
     return data.session?{}:{needsConfirm:true};
    },
    async signIn(email,pw){const {error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw mapErr(error);return {}},
+   async resetPassword(email){const {error}=await sb.auth.resetPasswordForEmail(email);if(error)throw mapErr(error);return {ok:true}},
    async signOut(){await sb.auth.signOut()},
    async getBiz(){const {data,error}=await sb.from('shops').select('name,upi_id,gstin').maybeSingle();if(error)throw mapErr(error);return data?{name:data.name,upi:data.upi_id,gst:data.gstin}:null},
    async saveBiz(b){const {error}=await sb.rpc('save_shop',{p_name:b.name,p_upi:b.upi,p_gstin:b.gst||''});if(error)throw mapErr(error)}
@@ -2000,6 +2005,27 @@ if(animated){
   if(sess&&biz){enter();return}
   if(sess&&!biz){startBiz();return}
   setMode('signup');show('auth');
+ });
+
+ 
+ $('btnForgot').addEventListener('click', async () => {
+  const err = $('authErr'), idEl = $('aId'), email = idEl.value.trim().toLowerCase(), btn = $('btnForgot');
+  note(err, '');
+  if (!email || !/^[^s@]+@[^s@]+\.[^s@]{2,}$/.test(email)) {
+   idEl.classList.add('bad');
+   note(err, 'Pehle apna registered email likhein.');
+   idEl.focus();
+   return;
+  }
+  btn.disabled = true;
+  try {
+   await auth.resetPassword(email);
+   note(err, 'Password reset ka link aapke email par bhej diya gaya hai.', true);
+  } catch(ex) {
+   note(err, ex.message);
+  } finally {
+   btn.disabled = false;
+  }
  });
 
  $('authForm').addEventListener('submit',async e=>{
