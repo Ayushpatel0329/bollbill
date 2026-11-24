@@ -154,38 +154,125 @@ class ResetPasswordPayload(BaseModel):
     email: str
 
 
+class SignupPayload(BaseModel):
+    email: str
+    password: str
+
+
+class LoginPayload(BaseModel):
+    email: str
+    password: str
+
+
+def _sb_headers(s) -> dict:
+    return {"apikey": s.supabase_anon_key, "Content-Type": "application/json"}
+
+
+def _map_sb_error(msg: str) -> str:
+    m = msg.lower()
+    if "invalid login" in m or "invalid credentials" in m:
+        return "Email ya password galat hai."
+    if "not confirmed" in m or "email not confirmed" in m:
+        return "Pehle email me aaye link se account confirm karein."
+    if "already registered" in m or "user already registered" in m:
+        return "Yeh email pehle se registered hai. Login karein."
+    if "at least" in m or "password" in m and "6" in m:
+        return "Password kam se kam 6 akshar ka rakhein."
+    if "rate limit" in m or "too many" in m or "over_email" in m:
+        return "Bahut koshishen ho gayi. Thodi der baad dobara karein."
+    if "weak password" in m:
+        return "Password zyada mushkil rakhein (number aur letter mile ho)."
+    return "Kuch gadbad ho gayi. Dobara koshish karein."
+
+
+@app.post("/api/auth/signup")
+async def signup_endpoint(payload: SignupPayload, request: Request):
+    """Backend proxy for Supabase signup — avoids client-side rate limits."""
+    s = request.app.state.settings
+    http: httpx.AsyncClient = request.app.state.http
+    url = f"{s.supabase_url}/auth/v1/signup"
+    try:
+        r = await http.post(
+            url,
+            headers=_sb_headers(s),
+            json={"email": payload.email, "password": payload.password},
+            timeout=15.0
+        )
+        body = r.json()
+        if r.status_code in (200, 201):
+            # Check for ghost user (email already registered but unconfirmed)
+            if body.get("identities") is not None and len(body.get("identities", [])) == 0:
+                raise HTTPException(409, "Yeh email pehle se registered hai. Login karein.")
+            # Return session if present, else needsConfirm
+            session = body.get("session") or {}
+            user = body.get("user") or body
+            return {
+                "ok": True,
+                "user_id": user.get("id", ""),
+                "email": user.get("email", payload.email),
+                "access_token": session.get("access_token", ""),
+                "refresh_token": session.get("refresh_token", ""),
+                "needs_confirm": not session.get("access_token")
+            }
+        # Error response
+        err_msg = body.get("msg") or body.get("message") or body.get("error_description") or body.get("error") or "Signup failed"
+        if r.status_code == 422 and "already" in str(err_msg).lower():
+            raise HTTPException(409, "Yeh email pehle se registered hai. Login karein.")
+        raise HTTPException(r.status_code if r.status_code >= 400 else 400, _map_sb_error(str(err_msg)))
+    except HTTPException:
+        raise
+    except Exception as ex:
+        log.warning(f"Signup proxy error: {ex}")
+        raise HTTPException(500, "Signup me dikkat aayi. Thodi der baad try karein.")
+
+
+@app.post("/api/auth/login")
+async def login_endpoint(payload: LoginPayload, request: Request):
+    """Backend proxy for Supabase login — avoids client-side rate limits."""
+    s = request.app.state.settings
+    http: httpx.AsyncClient = request.app.state.http
+    url = f"{s.supabase_url}/auth/v1/token?grant_type=password"
+    try:
+        r = await http.post(
+            url,
+            headers=_sb_headers(s),
+            json={"email": payload.email, "password": payload.password},
+            timeout=15.0
+        )
+        body = r.json()
+        if r.status_code == 200:
+            return {
+                "ok": True,
+                "access_token": body.get("access_token", ""),
+                "refresh_token": body.get("refresh_token", ""),
+                "user_id": body.get("user", {}).get("id", ""),
+                "email": body.get("user", {}).get("email", payload.email)
+            }
+        err_msg = body.get("msg") or body.get("message") or body.get("error_description") or body.get("error") or "Login failed"
+        raise HTTPException(r.status_code if r.status_code >= 400 else 401, _map_sb_error(str(err_msg)))
+    except HTTPException:
+        raise
+    except Exception as ex:
+        log.warning(f"Login proxy error: {ex}")
+        raise HTTPException(500, "Login me dikkat aayi. Thodi der baad try karein.")
+
+
 @app.post("/api/auth/reset-password")
 async def reset_password_endpoint(payload: ResetPasswordPayload, request: Request):
     """Fallback password reset handler called by frontend or direct client."""
     s = request.app.state.settings
     url = f"{s.supabase_url.rstrip('/')}/auth/v1/recover"
-    headers = {
-        "apikey": s.supabase_anon_key,
-        "Content-Type": "application/json"
-    }
     http: httpx.AsyncClient = request.app.state.http
     try:
-        r = await http.post(url, headers=headers, json={"email": payload.email}, timeout=10.0)
+        r = await http.post(url, headers=_sb_headers(s), json={"email": payload.email}, timeout=10.0)
         if r.status_code in (200, 204):
-            return {
-                "ok": True,
-                "message": "Password reset ka link aapke email par bhej diya gaya hai."
-            }
+            return {"ok": True, "message": "Password reset ka link aapke email par bhej diya gaya hai."}
         if r.status_code == 429 or "rate_limit" in r.text:
-            return {
-                "ok": True,
-                "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
-            }
-        return {
-            "ok": True,
-            "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
-        }
+            return {"ok": True, "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."}
+        return {"ok": True, "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."}
     except Exception as ex:
         log.warning(f"Reset password error: {ex}")
-        return {
-            "ok": True,
-            "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."
-        }
+        return {"ok": True, "message": "Password reset request darj kar li gayi hai. Kripya apna inbox check karein."}
 
 
 # ---------------- RELEASE 2: FEATURE 2 (PURCHASE FILE IMPORT) ----------------
