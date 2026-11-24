@@ -35,6 +35,7 @@ from .udhaar_agent import (
     classify_reply,
     find_overdue_bills
 )
+from .stt import transcribe_audio
 
 log = logging.getLogger("bollbill")
 logging.basicConfig(level=logging.INFO)
@@ -455,6 +456,39 @@ async def deny_reminder(
         })
         return {"ok": True, "status": "denied", "snooze_until": snooze_until}
     except Exception as e:
+        raise _http(e)
+
+
+# ---------------- SPEECH TO TEXT (NVIDIA BUILD / ASR) ----------------
+
+@app.post("/api/voice/transcribe")
+async def transcribe_speech(
+    request: Request,
+    file: UploadFile = File(...),
+    language: str = Form("hi"),
+    user: User = Depends(current_user)
+):
+    """Transcribes user recorded audio using NVIDIA Build STT (Whisper Large v3)."""
+    s = request.app.state.settings
+    if not s.nvidia_api_key:
+        raise HTTPException(500, "NVIDIA_API_KEY is not configured on the server.")
+    
+    try:
+        audio_bytes = await file.read()
+        res = await transcribe_audio(
+            audio_bytes,
+            file.filename or "recording.webm",
+            api_key=s.nvidia_api_key,
+            language=language,
+            client=request.app.state.http
+        )
+        if not res.get("ok"):
+            raise HTTPException(502, res.get("error") or "Transcription failed.")
+        return {"ok": True, "text": res.get("text", "")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("transcribe_speech failed")
         raise _http(e)
 
 

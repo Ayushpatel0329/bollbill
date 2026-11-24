@@ -11,6 +11,8 @@ class ConfigError(RuntimeError):
 class Settings:
     supabase_url: str
     supabase_anon_key: str
+    nvidia_api_key: str
+    nvidia_stt_function_id: str
     anthropic_api_key: str
     grok_api_key: str
     model_fast: str
@@ -57,6 +59,8 @@ def load_settings() -> Settings:
     return Settings(
         supabase_url=env["SUPABASE_URL"].rstrip("/"),
         supabase_anon_key=env["SUPABASE_ANON_KEY"],
+        nvidia_api_key=env.get("NVIDIA_API_KEY", ""),
+        nvidia_stt_function_id=env.get("NVIDIA_STT_FUNCTION_ID", ""),
         anthropic_api_key=env.get("ANTHROPIC_API_KEY", "dummy"),
         grok_api_key=env.get("GROK_API_KEY", ""),
         model_fast=env.get("MODEL_FAST", "claude-haiku-5-5"),
