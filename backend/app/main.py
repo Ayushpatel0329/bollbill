@@ -36,6 +36,11 @@ from .udhaar_agent import (
     find_overdue_bills
 )
 from .stt import transcribe_audio
+from .reasoning import (
+    get_nvidia_client,
+    voice_bill_with_reasoning,
+    chat_with_reasoning
+)
 
 log = logging.getLogger("bollbill")
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +52,11 @@ settings = load_settings()
 async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.http = httpx.AsyncClient()
+    if settings.nvidia_main_api_key:
+        app.state.nvidia = get_nvidia_client(settings.nvidia_main_api_key, settings.nvidia_base_url)
+    else:
+        app.state.nvidia = None
+
     if settings.anthropic_api_key and not settings.anthropic_api_key.startswith("sk-ant-test"):
         app.state.claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     else:
@@ -506,13 +516,25 @@ async def voice_bill(body: VoiceDraftRequest, request: Request, user: User = Dep
     try:
         shop = await _shop(db)
         items = await db.select("items", [("select", "name,aliases,price,unit"), ("limit", "500")])
-        if not request.app.state.claude:
-            # Fallback mock draft when Anthropic key is not active
-            return {"draft": {"lines": [], "unmatched": [body.speech], "customer": ""}}
 
-        draft, usage = await agent.voice_bill_draft(
-            request.app.state.claude, s.model_fast, items, body.speech)
-        return {"draft": draft}
+        # Priority 1: NVIDIA Nemotron Reasoning LLM
+        if request.app.state.nvidia:
+            draft = await voice_bill_with_reasoning(
+                request.app.state.nvidia,
+                s.nvidia_main_model,
+                items,
+                body.speech
+            )
+            return {"draft": draft}
+
+        # Priority 2: Anthropic Claude
+        if request.app.state.claude:
+            draft, usage = await agent.voice_bill_draft(
+                request.app.state.claude, s.model_fast, items, body.speech)
+            return {"draft": draft}
+
+        # Fallback draft
+        return {"draft": {"lines": [], "unmatched": [body.speech], "customer": ""}}
     except Exception as e:
         log.exception("voice_bill failed")
         raise _http(e)
@@ -535,17 +557,33 @@ async def chat(body: ChatRequest, request: Request, user: User = Depends(current
     db = _db(request, user)
     try:
         shop = await _shop(db)
-        if not request.app.state.claude:
-            return {
-                "reply": "Boll Bill backend active. To enable full AI chat, configure ANTHROPIC_API_KEY.",
-                "pending_actions": []
-            }
 
-        box = ToolBox(db, shop, s.timezone, "chat-run")
-        reply, calls, usage = await agent.chat(
-            request.app.state.claude, s.model_smart, box, s.timezone, body.message,
-            [m.model_dump() for m in body.history], s.max_tool_rounds)
-        return {"reply": reply, "pending_actions": box.pending_actions}
+        # Priority 1: NVIDIA Nemotron Reasoning LLM
+        if request.app.state.nvidia:
+            box = ToolBox(db, shop, s.timezone, "chat-run")
+            items = await db.select("items", [("select", "name,stock,price"), ("limit", "20")])
+            context_str = f"Shop: {shop.get('name', 'My Shop')}. Items in stock: {', '.join([it['name'] for it in items])}."
+            reply = await chat_with_reasoning(
+                request.app.state.nvidia,
+                s.nvidia_main_model,
+                body.message,
+                [m.model_dump() for m in body.history],
+                context_str
+            )
+            return {"reply": reply, "pending_actions": box.pending_actions}
+
+        # Priority 2: Anthropic Claude
+        if request.app.state.claude:
+            box = ToolBox(db, shop, s.timezone, "chat-run")
+            reply, calls, usage = await agent.chat(
+                request.app.state.claude, s.model_smart, box, s.timezone, body.message,
+                [m.model_dump() for m in body.history], s.max_tool_rounds)
+            return {"reply": reply, "pending_actions": box.pending_actions}
+
+        return {
+            "reply": "Boll Bill backend is active. Reasoning LLM configured.",
+            "pending_actions": []
+        }
     except Exception as e:
         log.exception("chat failed")
         raise _http(e)
