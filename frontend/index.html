@@ -1816,6 +1816,19 @@ if(animated){
   return {sb,
    async session(){const {data}=await sb.auth.getSession();const s=data&&data.session;return s?{id:s.user.id,email:s.user.email}:null},
    async signUp(email,pw){
+    // Try direct user registration RPC to bypass Supabase free tier email rate limit
+    try {
+     const { data, error } = await sb.rpc('create_new_user', { p_email: email, p_password: pw });
+     if (!error && data && data.ok) return {};
+     if (error) {
+      const m = (error.message || '').toLowerCase();
+      if (m.includes('pehle se registered') || m.includes('already registered')) throw new Error('Yeh email pehle se registered hai. Login karein.');
+      if (m.includes('kam se kam 6') || m.includes('at least')) throw new Error('Password kam se kam 6 akshar ka rakhein.');
+     }
+    } catch(rpcEx) {
+     if (rpcEx.message && (rpcEx.message.includes('registered') || rpcEx.message.includes('Password'))) throw rpcEx;
+     console.warn('create_new_user RPC fallback:', rpcEx);
+    }
     const {data,error}=await sb.auth.signUp({email,password:pw});if(error)throw mapErr(error);
     if(data.user&&data.user.identities&&data.user.identities.length===0)throw new Error('Yeh email pehle se registered hai. Login karein.');
     return data.session?{}:{needsConfirm:true};
@@ -2074,7 +2087,7 @@ if(animated){
    if(mode==='signup'){
     const r=await auth.signUp(email,pw);
     if(r.needsConfirm){setMode('login');note(err,'Aapke email par confirm karne ka link bheja gaya hai. Link kholein, phir yahan Login karein.',true)}
-    else{sess=await auth.session();biz=null;busy(btn,false);startBiz()}
+    else{await auth.signIn(email,pw);sess=await auth.session();biz=null;busy(btn,false);startBiz()}
    }else{
     await auth.signIn(email,pw);sess=await auth.session();biz=await auth.getBiz();
     busy(btn,false);biz?enter():startBiz();
