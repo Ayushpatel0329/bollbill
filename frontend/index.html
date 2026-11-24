@@ -374,7 +374,11 @@ radial-gradient(380px circle at 12% 8%,rgba(239,151,62,.22),transparent 60%)}
    SUPABASE_URL      -> Supabase > Project Settings > API > Project URL
    SUPABASE_ANON_KEY -> same page, the "anon public" key (safe to put here; Row Level Security protects data)
    AGENT_API_URL     -> web address of the AI service, e.g. https://bollbill-ai.onrender.com  (optional) */
-window.BB_CONFIG = { SUPABASE_URL: "https://iehmrniimqvfhaeedgdx.supabase.co", SUPABASE_ANON_KEY: "sb_publishable_vscKTsJjlsWjmWYJSmourA_GlSQpml0", AGENT_API_URL: "http://127.0.0.1:8000" };
+window.BB_CONFIG = {
+  SUPABASE_URL: "https://iehmrniimqvfhaeedgdx.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_vscKTsJjlsWjmWYJSmourA_GlSQpml0",
+  AGENT_API_URL: (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") && window.location.port !== "8000" && window.location.port !== "" ? "http://127.0.0.1:8000" : ""
+};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>

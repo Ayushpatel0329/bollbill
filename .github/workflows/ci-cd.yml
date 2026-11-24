@@ -1,0 +1,64 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          python -m tests.test_backend
+          python -m unittest tests/test_release2.py
+
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run Frontend Sync Harness
+        run: |
+          node frontend/tests/sync_harness.js
+
+  deploy-readiness:
+    name: Vercel & Deployment Readiness
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Vercel Configuration & Assets
+        run: |
+          test -f vercel.json || (echo "vercel.json missing" && exit 1)
+          test -f requirements.txt || (echo "requirements.txt missing" && exit 1)
+          test -f frontend/index.html || (echo "frontend/index.html missing" && exit 1)
+          test -f backend/app/main.py || (echo "backend/app/main.py missing" && exit 1)
+          echo "All deployment configuration checks passed."
