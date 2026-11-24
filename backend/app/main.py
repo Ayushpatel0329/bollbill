@@ -126,6 +126,16 @@ def _http(e: Exception) -> HTTPException:
 
 # ---------------- HEALTH & ROOT ----------------
 
+@app.get("/")
+async def root_info():
+    return {
+        "app": "BOLL BILL API",
+        "status": "online",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health")
 async def health(request: Request):
     s = request.app.state.settings
