@@ -188,7 +188,7 @@ end $$;
 
 create or replace function public.save_shop(
   p_name text, p_upi text default '', p_gstin text default '', p_low_stock int default null
-) returns public.shops language plpgsql security invoker set search_path = public as $$
+) returns public.shops language plpgsql security definer set search_path = public as $$
 declare r public.shops;
 begin
   if auth.uid() is null then raise exception 'login required'; end if;
@@ -346,4 +346,11 @@ begin
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
+
+  -- Table permissions for authenticated users (protected by RLS)
+  grant all on table public.shops to authenticated;
+  grant all on table public.items to authenticated;
+  grant all on table public.bills to authenticated;
+  grant all on table public.agent_runs to authenticated;
+  grant all on table public.agent_actions to authenticated;
 end $$;

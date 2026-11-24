@@ -2097,7 +2097,7 @@ if(animated){
   const err=$('bizErr');
   if(n===0){const v=$('bName').value.trim();if(v.length<2){note(err,'Business ka naam likhein.');return false}data.name=v}
   if(n===1){const v=$('bUpi').value.trim();if(!upiOk(v)||!v){note(err,'UPI ID sahi likhein, jaise shopname@upi.');return false}data.upi=v}
-  if(n===2){const v=$('bGst').value.trim().toUpperCase();if(!gstOk(v)){note(err,'GST number 15 akshar ka hota hai, jaise 22AAAAA0000A1Z5.');return false}data.gst=v}
+  if(n===2){const v=$('bGst').value.trim().toUpperCase();if(v&&!gstOk(v)){note(err,'GST number 15 akshar ka hota hai, jaise 22AAAAA0000A1Z5.');return false}data.gst=v}
   return true;
  }
  $('bizForm').addEventListener('submit',e=>{e.preventDefault();if(!check(step))return;step<2?goStep(step+1):finish()});
@@ -2105,7 +2105,10 @@ if(animated){
  $('bizBack').onclick=()=>goStep(step-1);
  async function finish(){
   const btn=$('bizNext');busy(btn,true);
-  try{await auth.saveBiz({name:data.name,upi:data.upi,gst:data.gst||''});biz={name:data.name,upi:data.upi,gst:data.gst||''};busy(btn,false);enter()}
+  const shopName=(data.name||$('bName').value.trim())||'My Shop';
+  const shopUpi=(data.upi||$('bUpi').value.trim())||'';
+  const shopGst=(data.gst!==undefined?data.gst:$('bGst').value.trim().toUpperCase())||'';
+  try{await auth.saveBiz({name:shopName,upi:shopUpi,gst:shopGst});biz={name:shopName,upi:shopUpi,gst:shopGst};busy(btn,false);enter()}
   catch(ex){busy(btn,false);note($('bizErr'),ex.message)}
  }
 
