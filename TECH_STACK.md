@@ -31,14 +31,14 @@ graph LR
     subgraph AI & Voice Services
         Nemotron[NVIDIA Nemotron 3.5 Super VL]
         Riva[NVIDIA Riva Cloud ASR]
-        Claude[Anthropic Claude 3.5 Sonnet]
+        Grok[xAI xAI Grok-2]
     end
 
     SPA --> FastAPI
     SPA --> PostgreSQL
     FastAPI --> Nemotron
     FastAPI --> Riva
-    FastAPI --> Claude
+    FastAPI --> Grok
     FastAPI --> PostgreSQL
 ```
 
@@ -50,7 +50,7 @@ graph LR
 | :--- | :--- | :--- | :--- | :--- |
 | **Primary Voice Bill & Chat Reasoning** | NVIDIA Cloud API | `nvidia/nemotron-3.5-super-vl-120b-a12b` | Release 2.0 | High-reasoning model handling bilingual voice dictations (Hindi/Hinglish/English), mapping natural speech to items, quantities, and prices, and calculating discounts/GST. |
 | **Speech-to-Text (STT) Fallback** | NVIDIA Cloud Functions | NVIDIA Riva Conformer-CTC ASR | Production API | Processes binary audio recordings uploaded from devices without browser-level Web Speech support or noisy environments. |
-| **Complex Business Agent & Tool Calls** | Anthropic | `claude-3-5-sonnet-20241022` | API v1 | Deep multi-turn agent execution for executing shop actions (settling udhaar, finding overdue accounts, inventory analysis). |
+| **Complex Business Agent & Tool Calls** | xAI | `grok-3-5-sonnet-20241022` | API v1 | Deep multi-turn agent execution for executing shop actions (settling udhaar, finding overdue accounts, inventory analysis). |
 | **Native Audio Dictation** | Client Browser Engine | W3C Web Speech API (`webkitSpeechRecognition`) | Living Standard | Instant zero-latency speech recognition directly on client devices in Indian locales (`en-IN`, `hi-IN`). |
 
 ---
@@ -65,10 +65,10 @@ graph LR
   - Purpose: Production lightning-fast ASGI server handling concurrent async HTTP requests.
 
 ### Libraries & Dependencies
-- **`httpx` (>=0.28.0)**: Fully asynchronous HTTP client used for non-blocking communication with Supabase REST endpoints, NVIDIA API, and Anthropic API.
+- **`httpx` (>=0.28.0)**: Fully asynchronous HTTP client used for non-blocking communication with Supabase REST endpoints, NVIDIA API, and xAI API.
 - **`pydantic` (>=2.7.0)**: Strict typing and data validation for API payloads (import rows, bill structures, authentication requests).
 - **`python-multipart` (>=0.0.9)**: Streaming multi-part form data parser for purchase CSV/TSV file imports and audio binary uploads.
-- **`anthropic` (>=0.40.0)**: Official Anthropic Python SDK client for tool-use agentic workflows.
+- **`xai` (>=0.40.0)**: Official xAI Python SDK client for tool-use agentic workflows.
 - **`openai` (>=1.50.0)**: Official OpenAI Python SDK client configured to communicate with the NVIDIA OpenAI-compatible API base URL (`https://integrate.api.nvidia.com/v1`).
 - **`tzdata` (>=2024.1)**: Timezone database supporting strict local store timezone enforcement (`Asia/Kolkata`).
 

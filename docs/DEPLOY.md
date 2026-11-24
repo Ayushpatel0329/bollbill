@@ -1,11 +1,11 @@
 # BOLL BILL: deployment steps
 
-Total time: lagbhag 45 minute (pehli baar). Cost: shuru me sab free ho sakta hai, sirf AI (Claude) use ke hisaab se paisa lagta hai.
+Total time: lagbhag 45 minute (pehli baar). Cost: shuru me sab free ho sakta hai, sirf AI (Grok) use ke hisaab se paisa lagta hai.
 
 **Kaam ka order (isi order me karein):**
-1. Supabase (database + login)  →  2. Claude API key  →  3. AI service ko Render par  →  4. HTML ko Netlify par  →  5. Dono ko ek dusre ka address batana  →  6. Test
+1. Supabase (database + login)  →  2. Grok API key  →  3. AI service ko Render par  →  4. HTML ko Netlify par  →  5. Dono ko ek dusre ka address batana  →  6. Test
 
-Aapko chahiye: email se bane free accounts: **Supabase**, **Anthropic**, **GitHub**, **Render**, **Netlify**.
+Aapko chahiye: email se bane free accounts: **Supabase**, **xAI**, **GitHub**, **Render**, **Netlify**.
 
 > Sab kuch ek saath live karne ki zarurat nahi. Agar sirf login + cloud save chahiye, to step 1, 4, 5 kaafi hain. AI baad me (step 2, 3) jod sakte hain.
 
@@ -33,9 +33,9 @@ Aapko chahiye: email se bane free accounts: **Supabase**, **Anthropic**, **GitHu
 
 ---
 
-## Step 2: Claude API key
+## Step 2: Grok API key
 
-1. console.anthropic.com par account banayein, aur Billing me thode credits daalein.
+1. console.xai.com par account banayein, aur Billing me thode credits daalein.
 2. **API Keys → Create key**. `sk-ant-...` wali key copy karke notepad me rakh lein.
 3. Settings me **monthly spend limit** zarur lagayein, taaki galti se zyada kharch na ho.
 
@@ -72,10 +72,10 @@ Ye key sirf Step 3 me Render par jayegi. HTML me kabhi nahi.
    |---|---|
    | `SUPABASE_URL` | Step 1 ka Project URL |
    | `SUPABASE_ANON_KEY` | Step 1 ki **Publishable key** (naam anon hai, par key publishable wali hi daalein) |
-   | `ANTHROPIC_API_KEY` | Step 2 ki `sk-ant-...` key |
+   | `GROK_API_KEY` | Step 2 ki `sk-ant-...` key |
    | `ALLOWED_ORIGINS` | abhi `http://localhost:5500` likh dein, Step 5 me badlenge |
-   | `MODEL_FAST` | `claude-haiku-5-5` |
-   | `MODEL_SMART` | `claude-sonnet-5-5` |
+   | `MODEL_FAST` | `grok-haiku-5-5` |
+   | `MODEL_SMART` | `grok-sonnet-5-5` |
    | `DAILY_AI_LIMIT` | `200` (har user ke liye din me AI calls ki limit) |
 4. **Create Web Service** dabayein. Pehli build me kuch minute lagte hain.
 5. Ban jane par upar ek address dikhega, jaise `https://bollbill-ai.onrender.com`. Use copy kar lein.
@@ -135,7 +135,7 @@ Sab pass ho gaya to live hain. 🎉
 ## Live karne se pehle (security checklist)
 
 - [ ] Supabase me **Confirm email** dobara chalu kiya. Email bhejne ki default limit bahut kam hoti hai, isliye asli users ke liye Authentication me apna email provider (SMTP) jodein.
-- [ ] Anthropic par monthly spend limit laga hai.
+- [ ] xAI par monthly spend limit laga hai.
 - [ ] HTML me sirf URL aur **publishable** key hai, koi `secret` ya `service_role` key nahi.
 - [ ] GitHub repo **Private** hai aur usme `.env` nahi hai.
 - [ ] Render par `ALLOWED_ORIGINS` me sirf aapki site ka address hai.
@@ -153,10 +153,10 @@ Sab pass ho gaya to live hain. 🎉
 | Signup ka email nahi aata | Testing me **Confirm email** band rakhein. Live ke liye custom SMTP jodein. |
 | "Login expire ho gaya" | Dobara login karein. Phir bhi aaye to Render ki `SUPABASE_URL` aur key sahi hain ya nahi dekhein. |
 | AI bolta hai "Pehle apni dukaan ki details save karein" | Onboarding poori nahi hui. Logout karke dobara login karein aur business details bharein. |
-| "AI se jawab nahi mil paya" | Render → **Logs** dekhein. Aksar Anthropic key galat hai, credits khatam hain, ya model ka naam galat hai. |
+| "AI se jawab nahi mil paya" | Render → **Logs** dekhein. Aksar xAI key galat hai, credits khatam hain, ya model ka naam galat hai. |
 | Pehla AI jawab bahut der se aaya | Render ka free plan so gaya tha. Dobara try karein, ya paid plan lein. |
 | SQL me `permission denied for function` | `schema.sql` poori dobara Run karein (ye dobara chalane se kuch nahi bigadta). |
-| Render deploy me "Missing environment variables" | Step 3b ke teeno zaruri variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`) add karein. |
+| Render deploy me "Missing environment variables" | Step 3b ke teeno zaruri variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GROK_API_KEY`) add karein. |
 | "Aaj ki AI limit poori ho gayi" | `DAILY_AI_LIMIT` badhayein ya kal tak ruken. |
 
 Phir bhi atke to browser console (F12 → Console) ka laal error aur Render ke Logs ka aakhri hissa bhej dein. Usse jaldi pata chal jata hai.

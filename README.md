@@ -7,7 +7,7 @@
 ## 🌟 Key Features
 
 - **Multilingual Voice-to-Bill**: Support for Hindi, Hinglish, and English voice commands via Web Speech API and NVIDIA Riva Cloud STT fallback.
-- **AI Business Assistant & Reasoning**: Powered by NVIDIA Nemotron & Claude 3.5 Sonnet to query sales, stock, pending udhaar, and execute safe business tools.
+- **AI Business Assistant & Reasoning**: Powered by NVIDIA Nemotron & xAI Grok-2 to query sales, stock, pending udhaar, and execute safe business tools.
 - **Offline-First Data Sync**: Instant local updates with automatic bi-directional sync to Supabase PostgreSQL when connected.
 - **GST & UPI Billing**: Full GST calculation (CGST/SGST/IGST), discount options (% or flat ₹), and automatic dynamic UPI QR generation.
 - **Udhaar Management**: Debt tracking, overdue reminders, and WhatsApp customer messaging directly from the interface.
@@ -27,14 +27,14 @@ graph TD
     SupabaseAuth[Supabase Auth]
     SupabaseDB[(PostgreSQL Database)]
     NVIDIA[NVIDIA AI / Riva STT / Nemotron]
-    Claude[Anthropic Claude 3.5 Sonnet]
+    Grok[xAI xAI Grok-2]
 
     Client -->|Direct REST / Offline-First Sync| SupabaseDB
     Client -->|Token Auth & Proxy| Backend
     Client -->|Auth State| SupabaseAuth
     Backend -->|Auth Verification & Storage| SupabaseDB
     Backend -->|LLM Reasoning & STT| NVIDIA
-    Backend -->|Complex Business Agent| Claude
+    Backend -->|Complex Business Agent| Grok
 ```
 
 ### Request & Sync Lifecycle
@@ -220,8 +220,8 @@ NVIDIA_MAIN_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_STT_API_KEY=nvapi-your-key-here
 
-# Optional: Claude / Anthropic
-ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Optional: Grok / xAI
+GROK_API_KEY=sk-ant-your-key-here
 
 # System Settings
 ALLOWED_ORIGINS=*

@@ -151,12 +151,12 @@ def test_propose_then_confirm():
     assert db.rpcs[-1][0] == "mark_customer_paid" and "2 bill" in msg
 
 
-# ---------------- the agent loop (with a fake Claude) ----------------
+# ---------------- the agent loop (with a fake Grok) ----------------
 def _resp(blocks, stop):
     return NS(content=blocks, stop_reason=stop, usage=NS(input_tokens=10, output_tokens=5))
 
 
-class FakeClaude:
+class FakeGrok:
     def __init__(self, responses):
         self.responses, self.calls = list(responses), []
         self.messages = NS(create=self._create)
@@ -169,7 +169,7 @@ class FakeClaude:
 def test_chat_uses_tool_then_answers():
     db = FakeDB({"bills": BILLS})
     box = ToolBox(db, SHOP, "Asia/Kolkata")
-    client = FakeClaude([
+    client = FakeGrok([
         _resp([NS(type="tool_use", id="t1", name="get_udhaar_summary", input={})], "tool_use"),
         _resp([NS(type="text", text="Rahul ka ₹500 baaki hai.")], "end_turn"),
     ])
@@ -184,7 +184,7 @@ def test_chat_stops_after_max_rounds():
     db = FakeDB({"bills": BILLS})
     box = ToolBox(db, SHOP, "Asia/Kolkata")
     loop = [_resp([NS(type="tool_use", id=f"t{i}", name="get_low_stock", input={})], "tool_use") for i in range(3)]
-    reply, calls, _ = run(agent.chat(FakeClaude(loop), "m", box, "Asia/Kolkata", "x", [], 3))
+    reply, calls, _ = run(agent.chat(FakeGrok(loop), "m", box, "Asia/Kolkata", "x", [], 3))
     assert "chhota" in reply and len(calls) == 3
 
 
@@ -196,7 +196,7 @@ def test_chat_history_cleaning():
 
 def test_voice_draft():
     block = NS(type="tool_use", input={"lines": [{"item": "Aata", "qty": 2, "unit": "kg"}, {"item": "Zzz", "spoken": "zzz", "qty": 1, "unit": "kg"}]})
-    client = FakeClaude([_resp([block], "tool_use")])
+    client = FakeGrok([_resp([block], "tool_use")])
     draft, usage = run(agent.voice_bill_draft(client, "m", ITEMS, "do kilo aata aur zzz"))
     assert draft["lines"][0]["name"] == "Aata" and draft["unmatched"] == ["zzz"]
     assert client.calls[0]["tool_choice"] == {"type": "tool", "name": "submit_bill_draft"}

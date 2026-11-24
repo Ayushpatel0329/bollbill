@@ -16,7 +16,7 @@ class Settings:
     nvidia_base_url: str
     nvidia_stt_api_key: str
     nvidia_stt_function_id: str
-    anthropic_api_key: str
+    grok_api_key: str
     grok_api_key: str
     model_fast: str
     model_smart: str
@@ -67,10 +67,10 @@ def load_settings() -> Settings:
         nvidia_base_url=env.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
         nvidia_stt_api_key=env.get("NVIDIA_STT_API_KEY", env.get("NVIDIA_API_KEY", "")),
         nvidia_stt_function_id=env.get("NVIDIA_STT_FUNCTION_ID", ""),
-        anthropic_api_key=env.get("ANTHROPIC_API_KEY", "dummy"),
+        
         grok_api_key=env.get("GROK_API_KEY", ""),
-        model_fast=env.get("MODEL_FAST", "nvidia/nemotron-3.5-super-vl-120b-a12b"),
-        model_smart=env.get("MODEL_SMART", "nvidia/nemotron-3.5-super-vl-120b-a12b"),
+        model_fast=env.get("MODEL_FAST", "grok-2-latest"),
+        model_smart=env.get("MODEL_SMART", "grok-2-latest"),
         allowed_origins=origins or ["*"],
         rate_limit_per_min=_int("RATE_LIMIT_PER_MIN", 60),
         daily_ai_limit=_int("DAILY_AI_LIMIT", 500),

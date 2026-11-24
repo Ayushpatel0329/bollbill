@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 
-import anthropic
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,10 +56,7 @@ async def lifespan(app: FastAPI):
     else:
         app.state.nvidia = None
 
-    if settings.anthropic_api_key and not settings.anthropic_api_key.startswith("sk-ant-test"):
-        app.state.claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    else:
-        app.state.claude = None
+    app.state.grok = bool(settings.grok_api_key)
     app.state.limiter = RateLimiter(settings.rate_limit_per_min, settings.daily_ai_limit)
     yield
     await app.state.http.aclose()
@@ -144,7 +140,7 @@ async def health(request: Request):
         "service": "bollbill-api",
         "release": "2.0.0",
         "supabase_configured": bool(s.supabase_url and s.supabase_anon_key),
-        "ai_configured": bool(request.app.state.claude)
+        "ai_configured": bool(request.app.state.settings.grok_api_key or request.app.state.nvidia)
     }
 
 
@@ -664,10 +660,10 @@ async def voice_bill(body: VoiceDraftRequest, request: Request, user: User = Dep
             )
             return {"draft": draft}
 
-        # Priority 2: Anthropic Claude
-        if request.app.state.claude:
+        # Priority 2: xAI Grok
+        if request.app.state.nvidia:
             draft, usage = await agent.voice_bill_draft(
-                request.app.state.claude, s.model_fast, items, body.speech)
+                request.app.state.nvidia, s.model_fast, items, body.speech)
             return {"draft": draft}
 
         # Fallback draft
@@ -709,11 +705,11 @@ async def chat(body: ChatRequest, request: Request, user: User = Depends(current
             )
             return {"reply": reply, "pending_actions": box.pending_actions}
 
-        # Priority 2: Anthropic Claude
-        if request.app.state.claude:
+        # Priority 2: xAI Grok
+        if request.app.state.nvidia:
             box = ToolBox(db, shop, s.timezone, "chat-run")
             reply, calls, usage = await agent.chat(
-                request.app.state.claude, s.model_smart, box, s.timezone, body.message,
+                request.app.state.nvidia, s.model_smart, box, s.timezone, body.message,
                 [m.model_dump() for m in body.history], s.max_tool_rounds)
             return {"reply": reply, "pending_actions": box.pending_actions}
 

@@ -1,4 +1,4 @@
-"""Talks to Claude. Two jobs:
+"""Talks to Grok. Two jobs:
 1. voice_bill_draft: turn a spoken sentence into a DRAFT bill (nothing is saved).
 2. chat: answer questions about the shop with tools; changes only as pending confirmations."""
 import json
@@ -10,11 +10,11 @@ from .errors import AgentError
 from .tools import TOOLS, ToolBox
 
 try:  # the SDK is only needed for real calls; tests run without it
-    import anthropic
-    _API_ERRORS = (anthropic.APIError,)
-    _RATE = getattr(anthropic, "RateLimitError", ())
+    import openai
+    _API_ERRORS = (openai.APIError,)
+    _RATE = getattr(openai, "RateLimitError", ())
 except ImportError:  # pragma: no cover
-    anthropic, _API_ERRORS, _RATE = None, (), ()
+    openai, _API_ERRORS, _RATE = None, (), ()
 
 VOICE_SYSTEM = (
     "You turn a shopkeeper's spoken sentence (Hindi, Hinglish or English, possibly mis-heard by speech "
